@@ -1,7 +1,7 @@
 import { FICHA_POR_ID, FICHAS, identificarFicha, MODELOS, normalizar, PRINCIPAIS, type Modelo } from "./fichas";
 import { videoFor, videoForQuestion } from "./videos";
 
-export type Stage = "modelo" | "menu" | "problema" | "descrever" | "esclarecer" | "guia" | "confirmar" | "duvida" | "avaliar" | "encerrado" | "transferido";
+export type Stage = "inicio" | "categoria" | "outro_descrever" | "outro_confirmar" | "modelo" | "menu" | "problema" | "descrever" | "esclarecer" | "video_offer" | "guia" | "confirmar" | "duvida" | "avaliar" | "encerrado" | "transferido";
 export type Outcome = "resolvido_autodeclarado" | "transferido_pendente" | "abandonou";
 export type Option = { id: string; label: string };
 export type BotMessage = { text: string; options?: Option[]; links?: Array<{ label: string; url: string }>; source?: string; tone?: "normal" | "alert" | "success"; ephemeral?: boolean };
@@ -24,6 +24,7 @@ export type Conversation = {
   handoffSummary?: string;
   manualAnswerUsed?: boolean;
   pendingQuestion?: string;
+  pendingProblem?: number;
   questionAttempts?: number;
   rating?: number;
   startedAt: number;
@@ -34,6 +35,8 @@ export type Conversation = {
 };
 
 const op = (id: string, label: string): Option => ({ id, label });
+const categoryOptions: Option[] = [op("category:machine", "Problema ou dúvida da máquina"), op("category:other", "Outro problema ou dúvida")];
+const modelOptions = [...MODELOS.map((model) => op(`model:${model}`, model)), op("model:other", "Outra máquina")];
 const menu: Option[] = [op("topic:problem", "Problema na máquina"), op("topic:question", "Dúvida sobre a máquina")];
 const problemOptions = [
   ...PRINCIPAIS.map((id) => op(`issue:${id}`, FICHA_POR_ID.get(id)!.titulo)),
@@ -55,9 +58,9 @@ function send(s: Conversation, message: BotMessage) { s.messages.push(message); 
 
 export function newConversation(id: string, now = Date.now()): Conversation {
   return {
-    id, stage: "modelo", step: 0, failures: 0, misunderstandings: 0,
+    id, stage: "inicio", step: 0, failures: 0, misunderstandings: 0,
     clarificationAsked: false, awaitingStepQuestion: false, stepsShown: [], stepsFailed: [],
-    messages: [{ text: "Olá! Vamos encontrar a orientação para sua máquina. Qual é o modelo?", options: [...MODELOS.map((m) => op(`model:${m}`, m)), op("model:other", "Outra máquina")] }],
+    messages: [],
     startedAt: now, updatedAt: now, aiCalls: 0, inputTokens: 0, outputTokens: 0
   };
 }
@@ -124,6 +127,12 @@ function startFicha(s: Conversation, id: number) {
   if (!ficha) return transfer(s, "ficha_indisponivel");
   s.issueId = id; s.step = 0; s.failures = 0; s.stepsShown = []; s.stepsFailed = [];
   send(s, { text: `Entendi. Vamos verificar: ${ficha.titulo}.` });
+  const video = videoFor(id, s.model);
+  if (video) {
+    s.stage = "video_offer";
+    send(s, { text: "Encontrei um tutorial que pode ajudar. Você pode assistir primeiro ou seguir comigo por mensagens.", links: [{ label: video.titulo, url: video.url }], options: [op("video:guide", "Prefiro que você me guie"), op("video:solved", "Assisti e resolveu")] });
+    return;
+  }
   showStep(s);
 }
 
@@ -133,6 +142,7 @@ function reset(s: Conversation, now: number): Conversation {
 
 export type Classifier = (text: string) => Promise<{ id: number | null; inputTokens?: number; outputTokens?: number }>;
 export type Answerer = (model: Modelo, question: string, context?: string) => Promise<{ text: string; source: string; inputTokens?: number; outputTokens?: number } | null>;
+export type OtherAnswerer = (question: string) => Promise<{ text: string; canHelp: boolean; inputTokens?: number; outputTokens?: number } | null>;
 
 async function answerQuestion(s: Conversation, question: string, answer?: Answerer) {
   s.stage = "duvida";
@@ -164,21 +174,55 @@ async function answerQuestion(s: Conversation, question: string, answer?: Answer
   send(s, { text: "Ainda não encontrei informação suficiente para responder com segurança. Você pode perguntar de outra forma, consultar os guias da sua máquina ou procurar a Central de Ajuda TRES.", options: [op("question:another", "Fazer outra pergunta"), op("topic:problem", "Resolver um problema"), op("support:human", "Central de Ajuda")] });
 }
 
-export async function processar(base: Conversation, input: string, classify?: Classifier, answer?: Answerer, now = Date.now()): Promise<Conversation> {
+export async function processar(base: Conversation, input: string, classify?: Classifier, answer?: Answerer, now = Date.now(), answerOther?: OtherAnswerer): Promise<Conversation> {
   let s: Conversation = structuredClone(base);
   const text = input.trim().slice(0, 800);
   if (text === "restart") return reset(s, now);
   if (["encerrado", "transferido"].includes(s.stage)) return s;
   s.updatedAt = now;
 
-  if (humanPattern.test(text) && !text.startsWith("model:")) { transfer(s, "pedido_expresso"); return s; }
+  if (humanPattern.test(text) && !text.startsWith("model:") && s.stage !== "inicio") { transfer(s, "pedido_expresso"); return s; }
   if (riskPattern.test(normalizar(text))) { transfer(s, "sinal_de_risco"); return s; }
   if (text === "support:human") { transfer(s, "pedido_expresso"); return s; }
   if (s.messages.at(-1)?.options?.some((option) => option.id === text)) s.misunderstandings = 0;
 
+  if (s.stage === "inicio") {
+    if (!text) return s;
+    s.startedAt = now;
+    const initialIssue = identificarFicha(text);
+    if (initialIssue) s.pendingProblem = initialIssue.id;
+    else if (isQuestion(text) || wantsVideo(text)) s.pendingQuestion = text;
+    s.stage = "categoria";
+    send(s, { text: "Oi! Sua dúvida é sobre uma máquina TRES ou sobre outro assunto?", options: categoryOptions });
+    return s;
+  }
+  if (s.stage === "categoria") {
+    if (text === "category:machine") { s.stage = "modelo"; send(s, { text: "Qual é o modelo da sua máquina?", options: modelOptions }); return s; }
+    if (text === "category:other") { delete s.pendingQuestion; delete s.pendingProblem; s.entry = "outro_assunto"; s.stage = "outro_descrever"; send(s, { text: "Conte brevemente, de forma simples e direta, qual é sua dúvida ou problema." }); return s; }
+    repeatChoice(s, "Escolha o assunto para eu ajudar melhor.", categoryOptions); return s;
+  }
+  if (s.stage === "outro_descrever") {
+    if (!text) { send(s, { text: "Conte brevemente qual é sua dúvida ou problema." }); return s; }
+    let result: Awaited<ReturnType<OtherAnswerer>> = null;
+    if (answerOther) {
+      try { result = await answerOther(text); } catch { /* Human support remains available. */ }
+    }
+    if (result) { s.aiCalls++; s.inputTokens += result.inputTokens || 0; s.outputTokens += result.outputTokens || 0; }
+    if (!result?.canHelp || !result.text.trim()) { transfer(s, "outro_assunto_sem_resposta"); return s; }
+    s.stage = "outro_confirmar";
+    send(s, { text: result.text, ephemeral: true });
+    send(s, { text: "Isso respondeu sua dúvida?", options: [op("other:yes", "Sim"), op("other:no", "Ainda preciso de ajuda")] });
+    return s;
+  }
+  if (s.stage === "outro_confirmar") {
+    if (text === "other:yes") { s.stage = "encerrado"; s.outcome = "resolvido_autodeclarado"; send(s, { text: "Que bom! Se precisar, pode iniciar outra conversa.", options: [op("restart", "Começar outra conversa")] }); return s; }
+    if (text === "other:no") { transfer(s, "outro_assunto_nao_resolvido"); return s; }
+    repeatChoice(s, "Consegui responder sua dúvida?", [op("other:yes", "Sim"), op("other:no", "Ainda preciso de ajuda")]); return s;
+  }
+
   if (s.stage === "modelo" && (isQuestion(text) || wantsVideo(text))) {
     s.pendingQuestion = text;
-    send(s, { text: "Qual é o modelo da sua máquina? Assim consigo responder com mais precisão.", options: [...MODELOS.map((m) => op(`model:${m}`, m)), op("model:other", "Outra máquina")] });
+    send(s, { text: "Qual é o modelo da sua máquina? Assim consigo responder com mais precisão.", options: modelOptions });
     return s;
   }
   if (s.model && ["menu", "problema", "descrever", "esclarecer"].includes(s.stage) && isQuestion(text)) {
@@ -186,7 +230,7 @@ export async function processar(base: Conversation, input: string, classify?: Cl
     await answerQuestion(s, text, answer);
     return s;
   }
-  if (s.model && wantsVideo(text) && !text.startsWith("step:")) { sendVideo(s, text); return s; }
+  if (s.model && s.stage !== "video_offer" && wantsVideo(text) && !/^(step|video):/.test(text)) { sendVideo(s, text); return s; }
 
   if (s.stage === "modelo") {
     if (text === "model:other") {
@@ -194,7 +238,7 @@ export async function processar(base: Conversation, input: string, classify?: Cl
       transfer(s, "modelo_fora_do_escopo"); return s;
     }
     const model = text.replace(/^model:/, "") as Modelo;
-    if (!MODELOS.includes(model)) { repeatChoice(s, "Ajudo apenas com máquinas TRES. Escolha um dos modelos mostrados.", [...MODELOS.map((m) => op(`model:${m}`, m)), op("model:other", "Outra máquina")]); return s; }
+    if (!MODELOS.includes(model)) { repeatChoice(s, "Ajudo apenas com máquinas TRES. Escolha um dos modelos mostrados.", modelOptions); return s; }
     s.misunderstandings = 0;
     s.model = model; s.stage = "menu";
     if (s.pendingQuestion) {
@@ -202,6 +246,12 @@ export async function processar(base: Conversation, input: string, classify?: Cl
       delete s.pendingQuestion;
       if (wantsVideo(pending)) { sendVideo(s, pending); return s; }
       await answerQuestion(s, pending, answer);
+      return s;
+    }
+    if (s.pendingProblem) {
+      const issue = s.pendingProblem;
+      delete s.pendingProblem;
+      startFicha(s, issue);
       return s;
     }
     send(s, { text: `Certo, ${model}. O que está acontecendo?`, options: menu }); return s;
@@ -247,6 +297,12 @@ export async function processar(base: Conversation, input: string, classify?: Cl
     }
     send(s, { text: "Ainda não consegui identificar o que está acontecendo. Você pode descrever de outra forma ou consultar a Central de Ajuda TRES.", options: [op("support:human", "Central de Ajuda"), op("question:another", "Fazer outra pergunta")] });
     s.stage = "duvida"; return s;
+  }
+
+  if (s.stage === "video_offer") {
+    if (text === "video:guide" || /\b(me guie|passo a passo|orientacao|prefiro conversar)\b/.test(normalizar(text))) { showStep(s); return s; }
+    if (text === "video:solved" || /\b(resolveu|resolvi|funcionou)\b/.test(normalizar(text))) { s.stage = "confirmar"; send(s, { text: "Que bom! O problema foi resolvido?", options: [op("resolved:yes", "Sim, resolveu"), op("resolved:no", "Ainda preciso de ajuda")] }); return s; }
+    repeatChoice(s, "Você prefere assistir ao vídeo ou seguir comigo por mensagens?", [op("video:guide", "Prefiro que você me guie"), op("video:solved", "Assisti e resolveu")]); return s;
   }
 
   if (s.stage === "guia") {
@@ -305,6 +361,7 @@ export async function processar(base: Conversation, input: string, classify?: Cl
 
   if (s.stage === "confirmar") {
     if (text === "resolved:yes") { s.outcome = "resolvido_autodeclarado"; s.stage = "avaliar"; send(s, { text: "Que bom que conseguiu. Como avalia esta orientação?", tone: "success", options: [1, 2, 3, 4, 5].map((n) => op(`rating:${n}`, String(n))).concat(op("rating:skip", "Pular")) }); return s; }
+    if (text === "resolved:no" && s.stepsShown.length === 0 && videoFor(s.issueId!, s.model)) { showStep(s); return s; }
     if (text === "resolved:no") { transfer(s, "nao_resolvido_apos_ficha"); return s; }
     repeatChoice(s, "O problema foi solucionado?", [op("resolved:yes", "Sim"), op("resolved:no", "Não")]); return s;
   }
@@ -338,7 +395,7 @@ export function handoffReport(s: Conversation) {
   const ficha = s.issueId ? FICHA_POR_ID.get(s.issueId) : undefined;
   return {
     modelo: s.model || "não informado",
-    problema: ficha?.titulo || (s.entry === "duvida" ? "Dúvida sobre a máquina" : "Relato fora das fichas"),
+    problema: ficha?.titulo || (s.entry === "duvida" ? "Dúvida sobre a máquina" : s.entry === "outro_assunto" ? "Outro assunto" : "Relato fora das fichas"),
     ficha: ficha?.id || null,
     passosMostrados: s.stepsShown.map((i) => `${i + 1}. ${ficha?.passos[i]?.texto || ""}`),
     passosComDificuldade: s.stepsFailed.map((i) => i + 1),

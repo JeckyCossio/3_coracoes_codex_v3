@@ -13,7 +13,7 @@ type Stats = {
 };
 
 const layerNames: Record<string, string> = {
-  ficha_guiada: "Ficha guiada", ia_manual: "Resposta com manual", humano: "Transferência humana"
+  ficha_guiada: "Ficha guiada", ia_manual: "Resposta com manual", ia_geral: "Resposta geral", humano: "Transferência humana"
 };
 
 export default function Dashboard() {

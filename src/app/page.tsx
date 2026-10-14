@@ -14,12 +14,11 @@ export default function Home() {
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const sessionId = localStorage.getItem("tres-session") || undefined;
-    const sessionToken = localStorage.getItem("tres-session-token") || undefined;
-    const model = new URLSearchParams(window.location.search).get("modelo") || undefined;
-    fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, sessionToken, model }) })
+    const sessionId = localStorage.getItem("tres-session-v2") || undefined;
+    const sessionToken = localStorage.getItem("tres-session-token-v2") || undefined;
+    fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, sessionToken }) })
       .then((r) => { if (!r.ok) throw new Error("Falha ao iniciar"); return r.json(); })
-      .then((data) => { localStorage.setItem("tres-session", data.sessionId); if (data.sessionToken) localStorage.setItem("tres-session-token", data.sessionToken); setState(data.state); })
+      .then((data) => { localStorage.setItem("tres-session-v2", data.sessionId); if (data.sessionToken) localStorage.setItem("tres-session-token-v2", data.sessionToken); setState(data.state); })
       .catch(() => setError("Não foi possível abrir a conversa. Atualize a página e tente novamente."))
       .finally(() => setBusy(false));
   }, []);
@@ -35,13 +34,13 @@ export default function Home() {
     if (input === "restart") setUserMessages([]);
     else setUserMessages((items) => [...items, { at, text: label || input }]);
     try {
-      const sessionToken = localStorage.getItem("tres-session-token") || undefined;
+      const sessionToken = localStorage.getItem("tres-session-token-v2") || undefined;
       const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: state.id, sessionToken, input }) });
       if (!response.ok) throw new Error("Falha ao enviar");
       const data = await response.json();
-      localStorage.setItem("tres-session", data.sessionId);
-      if (data.sessionToken) localStorage.setItem("tres-session-token", data.sessionToken);
-      else localStorage.removeItem("tres-session-token");
+      localStorage.setItem("tres-session-v2", data.sessionId);
+      if (data.sessionToken) localStorage.setItem("tres-session-token-v2", data.sessionToken);
+      else localStorage.removeItem("tres-session-token-v2");
       setState(data.state);
     } catch {
       setUserMessages((items) => items.slice(0, -1));
@@ -58,11 +57,11 @@ export default function Home() {
       <a className="materials-link" href={`/ajuda${state?.model ? `?modelo=${state.model.toLowerCase()}` : ""}`}>← Guias e vídeos</a>
     </header>
     <section className="intro">
-      <div className="intro-copy"><p className="chip">A ajuda começa por aqui</p><h1>Seu café de volta,<br/><em>um passo de cada vez.</em></h1><p>Escolha sua máquina e conte o que você precisa. Podemos ajudar com dúvidas e problemas de uso.</p></div>
-      <ol className="intro-steps"><li><span className="n">01</span><p>Modelo</p></li><li><span className="n">02</span><p>Problema</p></li><li><span className="n">03</span><p>Orientação</p></li></ol>
+      <div className="intro-copy"><p className="chip">A ajuda começa por aqui</p><h1>Vamos resolver juntos,<br/><em>um passo de cada vez.</em></h1><p>Envie uma mensagem para começar. Vamos entender sua dúvida e encontrar a melhor orientação.</p></div>
+      <ol className="intro-steps"><li><span className="n">01</span><p>Mensagem</p></li><li><span className="n">02</span><p>Assunto</p></li><li><span className="n">03</span><p>Orientação</p></li></ol>
     </section>
     <section className="chat-panel" aria-label="Conversa de autoatendimento">
-      <div className="chat-top"><div className="avatar">T</div><div><strong>Assistente TRES</strong><small>{state?.model ? `Máquina ${state.model}` : "Escolha seu modelo para começar"}</small></div><div className="online"><span/> Disponível</div></div>
+      <div className="chat-top"><div className="avatar">T</div><div><strong>Assistente TRES</strong><small>{state?.model ? `Máquina ${state.model}` : "Envie uma mensagem para começar"}</small></div><div className="online"><span/> Disponível</div></div>
       <div className="chat-log" role="log" aria-live="polite" ref={logRef}>
         {state?.messages.map((message, index) => <div key={index}>
           {userMessages.filter((item) => item.at === index).map((item, i) => <div className="bubble-row user" key={i}><div className="bubble user-bubble">{item.text}</div></div>)}
@@ -73,7 +72,7 @@ export default function Home() {
       </div>
       <div className="chat-actions">
         {last?.options && <div className="quick-options">{last.options.map((option) => <button type="button" key={option.id} disabled={busy} onClick={() => send(option.id, option.label)}>{option.label}</button>)}</div>}
-        {canType && <form className="compose" onSubmit={(event) => { event.preventDefault(); send(draft); }}><label className="sr-only" htmlFor="message">Sua mensagem</label><input id="message" value={draft} maxLength={800} onChange={(event) => setDraft(event.target.value)} placeholder="Escreva sua mensagem ou peça um atendente" disabled={busy}/><button type="submit" disabled={busy || !draft.trim()} aria-label="Enviar mensagem"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></form>}
+        {canType && <form className="compose" onSubmit={(event) => { event.preventDefault(); send(draft); }}><label className="sr-only" htmlFor="message">Sua mensagem</label><input id="message" value={draft} maxLength={800} onChange={(event) => setDraft(event.target.value)} placeholder={state.stage === "inicio" ? "Escreva qualquer mensagem para começar" : "Escreva sua mensagem ou peça um atendente"} disabled={busy}/><button type="submit" disabled={busy || !draft.trim()} aria-label="Enviar mensagem"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></form>}
         {error && <p className="error" role="alert">{error}</p>}
       </div>
     </section>

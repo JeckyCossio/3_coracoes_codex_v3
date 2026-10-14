@@ -56,7 +56,7 @@ export function saveSession(state: Conversation) {
 
 export function saveCase(state: Conversation) {
   if (!state.outcome) return;
-  const layer = state.outcome === "transferido_pendente" ? "humano" : state.manualAnswerUsed ? "ia_manual" : "ficha_guiada";
+  const layer = state.outcome === "transferido_pendente" ? "humano" : state.entry === "outro_assunto" && state.aiCalls ? "ia_geral" : state.manualAnswerUsed ? "ia_manual" : "ficha_guiada";
   const durationSeconds = Math.max(0, Math.round((state.updatedAt - state.startedAt) / 1000));
   db().prepare(`INSERT INTO cases (id, started_at, finished_at, model, entry, issue_id, outcome,
     handoff_reason, steps_shown, steps_failed, abandoned_at_step, rating, ai_calls, input_tokens, output_tokens,
@@ -81,6 +81,7 @@ export function sweepExpired(now = Date.now()) {
   const rows = db().prepare("SELECT state_json FROM sessions WHERE updated_at < ?").all(now - 10 * 60_000) as { state_json: string }[];
   for (const row of rows) {
     const state = JSON.parse(row.state_json) as Conversation;
+    if (state.stage === "inicio") { db().prepare("DELETE FROM sessions WHERE id = ?").run(state.id); continue; }
     if (state.outcome || state.stage === "encerrado" || state.stage === "transferido") continue;
     state.outcome = "abandonou";
     state.stage = "encerrado";

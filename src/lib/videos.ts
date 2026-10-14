@@ -27,8 +27,7 @@ function safeVideo(video: Video | undefined) {
 export function videoFor(fichaId: number, modelo?: Modelo) {
   if (!modelo) return null;
   const topic = fichaId === 12 && modelo === "Luna" ? "bico"
-    : [4, 6].includes(fichaId) ? "limpeza_interna"
-    : [7, 13].includes(fichaId) ? "uso"
+    : fichaId === 6 && ["LOV", "Modo"].includes(modelo) ? "limpeza_interna"
     : null;
   return safeVideo(VIDEO_CATALOG.find((video) => video.modelo === modelo && video.topic === topic));
 }

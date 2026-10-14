@@ -29,7 +29,7 @@ http://localhost:3000/ajuda?modelo=luna
 http://localhost:3000/ajuda?modelo=touch
 ```
 
-Sem `?modelo=`, a pessoa escolhe o modelo na página. Com o parâmetro, os materiais e o chatbot já usam o modelo correspondente. Ao publicar, substitua apenas `http://localhost:3000` pelo domínio definitivo antes de gerar os QR Codes para impressão.
+Sem `?modelo=`, a pessoa escolhe o modelo na página de materiais. Com o parâmetro, os materiais desse modelo são exibidos. Ao abrir o chatbot, a conversa começa apenas após a primeira mensagem; o cliente escolhe o assunto e, se for sobre a máquina, seleciona o modelo. Ao publicar, substitua apenas `http://localhost:3000` pelo domínio definitivo antes de gerar os QR Codes para impressão.
 
 Verificação:
 
@@ -56,18 +56,20 @@ Esse modo é apenas para testar o chatbot. A sessão fica no navegador em um tok
 
 ## Demonstração sem chaves
 
-1. Escolha **LOV → Problema na máquina → Outro problema** e escreva `alavanca não fecha com cápsula`.
+1. Envie uma mensagem, escolha **Problema ou dúvida da máquina → LOV → Problema na máquina → Outro problema** e escreva `alavanca não fecha com cápsula`.
 2. Informe que o porta-cápsulas está cheio, siga o passo de limpeza e confirme **Sim, resolveu**. A resolução será registrada como **autodeclarada**.
-3. Inicie outra conversa. Escolha **Touch → Problema na máquina → Vazamento**. O fluxo identifica a falta da orientação “e-mail 37” e registra uma transferência simulada.
+3. Inicie outra conversa. Escolha **Problema ou dúvida da máquina → Touch → Problema na máquina → Vazamento**. O fluxo identifica a falta da orientação “e-mail 37” e apresenta o telefone de atendimento.
 4. Abra `/atendente` para ver o resumo e `/dashboard` para ver os dois casos. Os dados são marcados como simulados.
 
 ## Testar como consumidor
 
 1. Abra `http://localhost:3000` em uma janela anônima para iniciar uma sessão nova. Se o servidor não estiver aberto, execute `npm run dev`.
-2. Escolha **LOV** e pergunte diretamente: **“Qual a diferença dos botões das máquinas da 3 corações?”** A resposta deve explicar as teclas da LOV sem mostrar fontes ou termos internos.
-3. Inicie outra conversa e escolha **Touch → Dúvida sobre a máquina**. Pergunte sobre o reservatório; a resposta deve usar apenas informações da Touch.
+2. Escreva **“Qual a diferença dos botões das máquinas da 3 corações?”**, escolha **Problema ou dúvida da máquina → LOV**. A resposta deve explicar as teclas da LOV sem mostrar fontes ou termos internos.
+3. Inicie outra conversa e escolha **Problema ou dúvida da máquina → Touch → Dúvida sobre a máquina**. Pergunte sobre o reservatório; a resposta deve usar apenas informações da Touch.
 4. Faça uma pergunta sem cobertura, como **“Como conecto a LOV ao Wi-Fi?”**. O assistente deve pedir esclarecimentos ou indicar a Central de Ajuda, sem inventar instruções.
-5. Para ver a fila simulada e os indicadores, abra `/atendente` e `/dashboard` com qualquer usuário e a `PAINEL_SENHA` do seu `.env.local`.
+5. Para verificar o vídeo antes dos passos, descreva **“O bico está entupido”**, escolha **Problema ou dúvida da máquina → Luna** e escolha entre assistir ao tutorial ou receber orientação por mensagens.
+6. Para testar outro assunto, escolha **Outro problema ou dúvida**, descreva uma dúvida geral e confirme se a resposta ajudou. Caso não haja resposta segura, o chat informa o número **0800.031.3033**.
+7. Para ver a fila simulada e os indicadores, abra `/atendente` e `/dashboard` com qualquer usuário e a `PAINEL_SENHA` do seu `.env.local`.
 
 A transferência é simulada e não chega a uma pessoa real. As fichas técnicas ainda exigem revisão humana por modelo antes de atendimento público.
 
@@ -79,7 +81,7 @@ A integração RAG usa embeddings OpenAI `text-embedding-3-small`, um índice Pi
 
 - `src/lib/conversation.ts`: motor de estados sem dependência do canal. Recebe evento e estado; devolve a próxima etapa e as mensagens.
 - `src/lib/fichas.ts`: 13 fichas estruturadas do PDF do desafio. Passos dependentes de manual ou de material ausente são bloqueados para transferência.
-- `src/lib/ai.ts`: classificação de “Outro problema” pelo OpenRouter, quando habilitada.
+- `src/lib/ai.ts`: classificação de falhas da máquina e respostas gerais sobre outros assuntos pelo OpenRouter, quando habilitada.
 - `src/lib/rag.ts`: embedding da pergunta, busca nos manuais do modelo e resposta fundamentada. A referência fica interna; comparações explícitas entre modelos consultam os namespaces relevantes.
 - `src/lib/db.ts`: sessões, casos e fila simulada em SQLite.
 - `src/app/api/chat`: API da conversa; `/api/painel/*`: fila e indicadores.
@@ -97,7 +99,7 @@ Custo estimado de IA = `(tokens_entrada × LLM_INPUT_USD_PER_M + tokens_saida ×
 - Esta é uma **interface web que simula a etapa de WhatsApp**. Não existe número, webhook nem atendimento humano real. O motor foi separado do canal para permitir um adaptador oficial depois.
 - As instruções das fichas foram transcritas do fluxo interno, que não comprova aplicabilidade idêntica aos cinco modelos. Validar cada procedimento com os manuais e com Customer Success antes de uso público. As fichas 05, 06, 08, 09, 10 e 12 incluem pontos bloqueados; outras também podem exigir revisão.
 - A “resposta de e-mail 37” da ficha 10 não foi fornecida. O bot encaminha o caso em vez de improvisar.
-- As chaves e os manuais públicos já estão configurados nesta instalação local; as chaves não são versionadas. A origem dos PDFs incluídos está em `data/manuais/INDICE.md`. Os vídeos públicos são selecionados por modelo e assunto a partir do catálogo da página `/ajuda`; o chatbot não inventa URLs. Confirme o termo de confidencialidade antes de enviar material interno a serviços externos. O código envia ao Pinecone apenas manuais públicos e ao OpenRouter apenas a pergunta e trechos dos manuais no RAG; a classificação envia o relato do usuário quando ativada.
+- As chaves e os manuais públicos já estão configurados nesta instalação local; as chaves não são versionadas. A origem dos PDFs incluídos está em `data/manuais/INDICE.md`. Os vídeos públicos são selecionados por modelo e assunto a partir do catálogo da página `/ajuda`; o chatbot não inventa URLs. Confirme o termo de confidencialidade antes de enviar material interno a serviços externos. O código envia ao Pinecone apenas manuais públicos; no RAG, o OpenRouter recebe a pergunta e trechos dos manuais. Na classificação de falhas e no ramo de outros assuntos, o OpenRouter recebe o relato breve do cliente.
 - Em produção, substituir a senha Basic e o SQLite por autenticação e armazenamento corporativos, definir retenção e consentimento, validar segurança de conteúdo e integrar o canal WhatsApp e o atendimento humano.
 
 O estado do trabalho para continuar em outra sessão está em `docs/PROJETO.md`.

@@ -4,11 +4,51 @@ import { FICHAS } from "./fichas";
 
 async function sequence(inputs: string[]) {
   let s = newConversation("test-session");
+  if (inputs[0]?.startsWith("model:")) {
+    s = await processar(s, "Olá");
+    s = await processar(s, "category:machine");
+  }
   for (const input of inputs) s = await processar(s, input);
   return s;
 }
 
 describe("jornada de autoatendimento", () => {
+  it("começa sem fala do bot e pergunta o assunto depois da primeira mensagem", async () => {
+    const initial = newConversation("first-message");
+    expect(initial.stage).toBe("inicio");
+    expect(initial.messages).toEqual([]);
+    const s = await processar(initial, "Oi, preciso de ajuda");
+    expect(s.stage).toBe("categoria");
+    expect(s.messages.at(-1)?.options?.map((option) => option.id)).toEqual(["category:machine", "category:other"]);
+    const selected = await processar(s, "category:machine");
+    expect(selected.stage).toBe("modelo");
+    expect(selected.messages.at(-1)?.text).toContain("modelo");
+  });
+
+  it("aproveita o problema descrito na primeira mensagem após escolher a máquina", async () => {
+    const s = await sequence(["O bico está entupido", "category:machine", "model:Luna"]);
+    expect(s.issueId).toBe(12);
+    expect(s.stage).toBe("video_offer");
+    expect(s.stepsShown).toEqual([]);
+  });
+
+  it("responde outro assunto com IA e confirma se ajudou", async () => {
+    let s = await sequence(["Olá", "category:other"]);
+    expect(s.stage).toBe("outro_descrever");
+    s = await processar(s, "Como guardar as cápsulas?", undefined, undefined, Date.now(), async () => ({ text: "Guarde em local seco, conforme a embalagem.", canHelp: true }));
+    expect(s.stage).toBe("outro_confirmar");
+    expect(s.messages.at(-2)?.text).toContain("local seco");
+    s = await processar(s, "other:yes");
+    expect(s.outcome).toBe("resolvido_autodeclarado");
+  });
+
+  it("encaminha outro assunto sem resposta para o telefone", async () => {
+    let s = await sequence(["Olá", "category:other"]);
+    s = await processar(s, "Onde está meu pedido?", undefined, undefined, Date.now(), async () => ({ text: "", canHelp: false }));
+    expect(s.stage).toBe("transferido");
+    expect(s.messages.at(-1)?.text).toContain("0800.031.3033");
+  });
+
   it("encerra como resolução autodeclarada após uma ficha simples", async () => {
     const s = await sequence(["model:LOV", "topic:problem", "issue:other", "alavanca não fecha com cápsula", "decision:yes", "step:done", "resolved:yes", "rating:4"]);
     expect(s.stage).toBe("encerrado");
@@ -52,11 +92,28 @@ describe("jornada de autoatendimento", () => {
     expect(s.messages.at(-1)?.links?.[0]?.url).toBe("https://www.youtube.com/watch?v=TUre1TNoJnQ");
   });
 
-  it("oferece o vídeo específico durante a orientação", async () => {
+  it("oferece o vídeo específico antes da orientação", async () => {
     let s = await sequence(["model:Luna", "topic:problem", "issue:other", "bico entupido"]);
+    expect(s.stage).toBe("video_offer");
+    expect(s.messages.at(-1)?.links?.[0]?.url).toBe("https://www.youtube.com/watch?v=SsOypE_tndw");
+    expect(s.stepsShown).toEqual([]);
+    s = await processar(s, "video:guide");
+    expect(s.stage).toBe("guia");
     expect(s.messages.at(-1)?.options?.some((option) => option.id === "step:video")).toBe(true);
     s = await processar(s, "step:video");
     expect(s.messages.at(-1)?.links?.[0]?.url).toBe("https://www.youtube.com/watch?v=SsOypE_tndw");
+  });
+
+  it("permite concluir após assistir ao vídeo", async () => {
+    const s = await sequence(["model:Luna", "topic:problem", "issue:other", "bico entupido", "video:solved", "resolved:yes"]);
+    expect(s.stage).toBe("avaliar");
+    expect(s.stepsShown).toEqual([]);
+  });
+
+  it("inicia o guia se o vídeo não resolveu", async () => {
+    const s = await sequence(["model:Luna", "topic:problem", "issue:other", "bico entupido", "video:solved", "resolved:no"]);
+    expect(s.stage).toBe("guia");
+    expect(s.stepsShown).toEqual([0]);
   });
 
   it("não recomenda vídeo de limpeza de outro modelo", async () => {
@@ -113,8 +170,8 @@ describe("jornada de autoatendimento", () => {
     async (id, relato) => {
       const s = await sequence(["model:LOV", "topic:problem", "issue:other", relato]);
       expect(s.issueId).toBe(id);
-      expect(["guia", "transferido"]).toContain(s.stage);
-      expect(s.messages.some((m) => m.source === `Fluxo CS, ficha ${id}, p. ${FICHAS[id - 1].pagina}` || m.text.includes("orientação específica"))).toBe(true);
+      expect(["guia", "video_offer", "transferido"]).toContain(s.stage);
+      expect(s.messages.some((m) => m.source === `Fluxo CS, ficha ${id}, p. ${FICHAS[id - 1].pagina}` || m.links?.some((link) => link.url.includes("youtube.com")) || m.text.includes("orientação específica"))).toBe(true);
     }
   );
 
@@ -217,7 +274,7 @@ describe("jornada de autoatendimento", () => {
   });
 
   it("retoma a pergunta depois da escolha do modelo", async () => {
-    let s = await sequence(["Qual a diferença dos botões?"]);
+    let s = await sequence(["Qual a diferença dos botões?", "category:machine"]);
     expect(s.pendingQuestion).toContain("botões");
     s = await processar(s, "model:Touch", undefined, async () => ({ text: "As cores indicam opções de bebida.", source: "Manual Touch" }));
     expect(s.stage).toBe("duvida");
@@ -227,8 +284,9 @@ describe("jornada de autoatendimento", () => {
   it("não altera uma conversa encerrada ao receber mensagem repetida", async () => {
     let s = await sequence(["model:LOV", "quero falar com pessoa"]);
     const before = s.updatedAt;
+    const messages = s.messages.length;
     s = await processar(s, "step:done", undefined, undefined, before + 1000);
     expect(s.updatedAt).toBe(before);
-    expect(s.messages).toHaveLength(3);
+    expect(s.messages).toHaveLength(messages);
   });
 });

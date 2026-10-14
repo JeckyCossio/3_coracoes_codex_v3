@@ -35,7 +35,8 @@ assert.equal((await post("/api/painel/handoffs", { id: "ruim" }, true)).status, 
 async function journey(inputs) {
   let sessionId;
   let state;
-  for (const input of [undefined, ...inputs]) {
+  const opening = inputs[0]?.startsWith("model:") ? ["Olá", "category:machine"] : [];
+  for (const input of [undefined, ...opening, ...inputs]) {
     const result = await post("/api/chat", { sessionId, input });
     assert.equal(result.status, 200);
     sessionId = result.body.sessionId;

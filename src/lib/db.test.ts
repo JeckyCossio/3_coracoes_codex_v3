@@ -19,6 +19,8 @@ describe("persistência do protótipo", () => {
   it("registra transferência uma só vez e permite marcar atendimento", async () => {
     const id = randomUUID();
     let s = createSession(id);
+    s = await processar(s, "Olá");
+    s = await processar(s, "category:machine");
     s = await processar(s, "model:LOV");
     s = await processar(s, "quero uma pessoa");
     saveSession(s); saveCase(s); saveCase(s);
@@ -42,6 +44,7 @@ describe("persistência do protótipo", () => {
   it("encerra como abandono uma sessão inativa e preserva casos já concluídos", async () => {
     const now = Date.now();
     const abandoned = newConversation(randomUUID(), now - 11 * 60_000);
+    abandoned.stage = "guia";
     abandoned.model = "LOV";
     abandoned.issueId = 6;
     abandoned.step = 1;
