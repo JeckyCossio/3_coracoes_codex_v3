@@ -11,7 +11,6 @@ export default function Home() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [userMessages, setUserMessages] = useState<LocalUserMessage[]>([]);
-  const [demoMode, setDemoMode] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -20,7 +19,7 @@ export default function Home() {
     const model = new URLSearchParams(window.location.search).get("modelo") || undefined;
     fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, sessionToken, model }) })
       .then((r) => { if (!r.ok) throw new Error("Falha ao iniciar"); return r.json(); })
-      .then((data) => { localStorage.setItem("tres-session", data.sessionId); if (data.sessionToken) localStorage.setItem("tres-session-token", data.sessionToken); setDemoMode(Boolean(data.demoMode)); setState(data.state); })
+      .then((data) => { localStorage.setItem("tres-session", data.sessionId); if (data.sessionToken) localStorage.setItem("tres-session-token", data.sessionToken); setState(data.state); })
       .catch(() => setError("Não foi possível abrir a conversa. Atualize a página e tente novamente."))
       .finally(() => setBusy(false));
   }, []);
@@ -43,7 +42,6 @@ export default function Home() {
       localStorage.setItem("tres-session", data.sessionId);
       if (data.sessionToken) localStorage.setItem("tres-session-token", data.sessionToken);
       else localStorage.removeItem("tres-session-token");
-      setDemoMode(Boolean(data.demoMode));
       setState(data.state);
     } catch {
       setUserMessages((items) => items.slice(0, -1));
@@ -56,20 +54,19 @@ export default function Home() {
   return <main className="site-shell">
     <header className="site-header">
       <img className="brand-logo" src="/brand/cafeina-3coracoes.svg" alt="cafeína e 3corações" width="140" height="45"/>
-      <div><strong>TRES Ajuda</strong><small className="k">Protótipo de autoatendimento</small></div>
+      <div><strong>TRES Ajuda</strong><small className="k">Atendimento para sua máquina</small></div>
       <a className="materials-link" href={`/ajuda${state?.model ? `?modelo=${state.model.toLowerCase()}` : ""}`}>← Guias e vídeos</a>
     </header>
     <section className="intro">
-      <div className="intro-copy"><p className="chip">A ajuda começa por aqui</p><h1>Seu café de volta,<br/><em>um passo de cada vez.</em></h1><p>Escolha a máquina e conte o que aconteceu. Se o caso precisar de uma pessoa, o contexto segue junto.</p></div>
+      <div className="intro-copy"><p className="chip">A ajuda começa por aqui</p><h1>Seu café de volta,<br/><em>um passo de cada vez.</em></h1><p>Escolha sua máquina e conte o que você precisa. Podemos ajudar com dúvidas e problemas de uso.</p></div>
       <ol className="intro-steps"><li><span className="n">01</span><p>Modelo</p></li><li><span className="n">02</span><p>Problema</p></li><li><span className="n">03</span><p>Orientação</p></li></ol>
     </section>
     <section className="chat-panel" aria-label="Conversa de autoatendimento">
-      <div className="chat-top"><div className="avatar">T</div><div><strong>Assistente TRES</strong><small>{state?.model ? `Máquina ${state.model}` : "Escolha seu modelo para começar"}</small></div><div className="online"><span/> Protótipo</div></div>
+      <div className="chat-top"><div className="avatar">T</div><div><strong>Assistente TRES</strong><small>{state?.model ? `Máquina ${state.model}` : "Escolha seu modelo para começar"}</small></div><div className="online"><span/> Disponível</div></div>
       <div className="chat-log" role="log" aria-live="polite" ref={logRef}>
-        <p className="privacy-note">Conversa de demonstração. Nenhum atendente real recebe as mensagens.</p>
         {state?.messages.map((message, index) => <div key={index}>
           {userMessages.filter((item) => item.at === index).map((item, i) => <div className="bubble-row user" key={i}><div className="bubble user-bubble">{item.text}</div></div>)}
-          <div className="bubble-row"><div className={`bubble bot-bubble ${message.tone || ""}`}>{message.text}{message.source && <small className="source">{message.source}</small>}</div></div>
+          <div className="bubble-row"><div className={`bubble bot-bubble ${message.tone || ""}`}>{message.text}</div></div>
         </div>)}
         {userMessages.filter((item) => item.at >= (state?.messages.length || 0)).map((item, i) => <div className="bubble-row user" key={i}><div className="bubble user-bubble">{item.text}</div></div>)}
         {busy && <div className="bubble-row"><div className="bubble bot-bubble typing">Preparando a próxima orientação…</div></div>}
@@ -80,6 +77,6 @@ export default function Home() {
         {error && <p className="error" role="alert">{error}</p>}
       </div>
     </section>
-    <footer className="site-footer"><span>Baseado no fluxo de atendimento do desafio · Conteúdo por modelo pendente de validação</span>{!demoMode && <nav className="pill-nav" aria-label="Áreas internas"><a href="/atendente">Fila simulada</a><a href="/dashboard">Indicadores</a></nav>}</footer>
+    <footer className="site-footer"><a href="https://www.escolhatres.com.br/central-de-ajuda/" target="_blank" rel="noopener noreferrer">Central de Ajuda TRES ↗</a></footer>
   </main>;
 }

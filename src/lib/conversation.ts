@@ -23,6 +23,8 @@ export type Conversation = {
   handoffReason?: string;
   handoffSummary?: string;
   manualAnswerUsed?: boolean;
+  pendingQuestion?: string;
+  questionAttempts?: number;
   rating?: number;
   startedAt: number;
   updatedAt: number;
@@ -39,6 +41,13 @@ const problemOptions = [
 ];
 const humanPattern = /\b(atendente|pessoa|humano|humana|suporte humano|falar com alguem|falar com alguém)\b/i;
 const riskPattern = /\b(choque|faisca|fumaca|queimad[oa]|curto.?circuito|(agua|vazamento|molhad[oa]).{0,30}(tomada|cabo|fio|parte eletrica)|(tomada|cabo|fio|parte eletrica).{0,30}(agua|vazamento|molhad[oa]))\b/i;
+const questionStart = /^(qual|quais|como|o que|oque|por que|porque|para que|pra que|onde|quando|existe|tem como|pode me explicar|me explica|explique|gostaria de saber|queria saber|diferença|diferenca)\b/;
+
+function isQuestion(text: string) {
+  if (/^(model|topic|issue|step|decision|resolved|rating|question|support):/.test(text)) return false;
+  const normalized = normalizar(text);
+  return normalized.includes("?") || questionStart.test(normalized);
+}
 
 function send(s: Conversation, message: BotMessage) { s.messages.push(message); }
 
@@ -55,16 +64,15 @@ function transfer(s: Conversation, reason: string) {
   s.stage = "transferido";
   s.outcome = "transferido_pendente";
   s.handoffReason = reason;
-  const text = process.env.CHAT_STORAGE === "signed"
-    ? "Este caso precisa de atendimento humano. Esta demonstração não envia a conversa para uma fila; entre em contato pelos canais oficiais de atendimento."
-    : "Registrei sua solicitação na fila simulada do atendente. O resumo do que aconteceu já está disponível para ele.";
+  const text = reason === "sinal_de_risco" || reason === "vazamento_proximo_parte_eletrica"
+    ? "Por segurança, interrompa o uso da máquina. Para receber ajuda, acesse a Central de Ajuda TRES: https://www.escolhatres.com.br/central-de-ajuda/"
+    : "Para continuar com um atendente, acesse a Central de Ajuda TRES: https://www.escolhatres.com.br/central-de-ajuda/";
   send(s, { text, tone: "alert", options: [op("restart", "Começar outra conversa")] });
 }
 
 function repeatChoice(s: Conversation, message: string, options: Option[]) {
-  s.misunderstandings++;
-  if (s.misunderstandings >= 2) return transfer(s, "duas_entradas_nao_compreendidas");
-  send(s, { text: message, options });
+  s.misunderstandings = Math.min(s.misunderstandings + 1, 3);
+  send(s, { text: s.misunderstandings >= 2 ? "Ainda não entendi. Você pode escolher uma opção ou escrever sua dúvida com outras palavras." : message, options });
 }
 
 function isDecisionStep(id: number, step: number) {
@@ -81,7 +89,7 @@ function showStep(s: Conversation) {
     return send(s, { text: "O problema foi solucionado?", options: [op("resolved:yes", "Sim, resolveu"), op("resolved:no", "Não resolveu")] });
   }
   if (passo.bloqueado) {
-    send(s, { text: passo.bloqueado, source: `Fluxo CS, ficha ${ficha.id}, p. ${ficha.pagina}`, tone: "alert" });
+    send(s, { text: "Essa etapa exige uma orientação específica para o seu modelo.", tone: "alert" });
     return transfer(s, "instrucao_sem_validacao_por_modelo");
   }
   if (!s.stepsShown.includes(s.step)) s.stepsShown.push(s.step);
@@ -98,14 +106,14 @@ function showStep(s: Conversation) {
     if (ficha.id === 12) decisionOptions = [op("decision:yes", "Sim, saiu na bandeja"), op("decision:no", "Não saiu")];
     if (ficha.id === 13) decisionOptions = [op("decision:yes", "Sim, está cheio"), op("decision:no", "Não está cheio")];
   }
-  send(s, { text: `Passo ${s.step + 1} de ${ficha.passos.length}: ${passo.texto}`, source: `Fluxo CS, ficha ${ficha.id}, p. ${ficha.pagina}`, options: isDecision ? decisionOptions : [op("step:done", "Feito"), op("step:failed", "Não consegui"), op("step:help", "Não entendi o passo"), ...(video ? [op("step:video", "Ver vídeo")] : [])] });
+  send(s, { text: passo.texto, source: `Fluxo CS, ficha ${ficha.id}, p. ${ficha.pagina}`, options: isDecision ? decisionOptions : [op("step:done", "Feito"), op("step:failed", "Não consegui"), op("step:help", "Não entendi o passo"), ...(video ? [op("step:video", "Ver vídeo")] : [])] });
 }
 
 function startFicha(s: Conversation, id: number) {
   const ficha = FICHA_POR_ID.get(id);
   if (!ficha) return transfer(s, "ficha_indisponivel");
   s.issueId = id; s.step = 0; s.failures = 0; s.stepsShown = []; s.stepsFailed = [];
-  send(s, { text: `Vamos verificar: ${ficha.titulo}. Este é um protótipo com base no fluxo do atendimento. Os comandos ainda precisam ser conferidos no manual do seu modelo.`, tone: "alert" });
+  send(s, { text: `Entendi. Vamos verificar: ${ficha.titulo}.` });
   showStep(s);
 }
 
@@ -116,6 +124,35 @@ function reset(s: Conversation, now: number): Conversation {
 export type Classifier = (text: string) => Promise<{ id: number | null; inputTokens?: number; outputTokens?: number }>;
 export type Answerer = (model: Modelo, question: string, context?: string) => Promise<{ text: string; source: string; inputTokens?: number; outputTokens?: number } | null>;
 
+async function answerQuestion(s: Conversation, question: string, answer?: Answerer) {
+  s.stage = "duvida";
+  s.entry = "duvida";
+  if (answer && s.model) {
+    try {
+      const result = await answer(s.model, question);
+      if (result) {
+        s.aiCalls++;
+        s.inputTokens += result.inputTokens || 0;
+        s.outputTokens += result.outputTokens || 0;
+        s.manualAnswerUsed = true;
+        s.questionAttempts = 0;
+        send(s, { text: result.text, source: result.source, ephemeral: true });
+        send(s, { text: "Posso ajudar com mais alguma coisa?", options: [op("question:another", "Outra dúvida"), op("topic:problem", "Resolver um problema")] });
+        return;
+      }
+    } catch { /* Ask for detail when retrieval is unavailable. */ }
+  }
+  s.questionAttempts = (s.questionAttempts || 0) + 1;
+  if (s.questionAttempts === 1) {
+    const aboutButtons = /\b(botao|botoes|tecla|teclas)\b/.test(normalizar(question));
+    send(s, { text: aboutButtons
+      ? "Você quer saber a função dos botões de bebida ou o significado de alguma luz? Se puder, diga a cor do botão."
+      : "Pode me dar mais detalhes sobre sua dúvida? Diga o que você quer saber e o modelo da máquina, se ainda não informou." });
+    return;
+  }
+  send(s, { text: "Ainda não encontrei informação suficiente para responder com segurança. Você pode perguntar de outra forma, consultar os guias da sua máquina ou procurar a Central de Ajuda TRES.", options: [op("question:another", "Fazer outra pergunta"), op("topic:problem", "Resolver um problema"), op("support:human", "Central de Ajuda")] });
+}
+
 export async function processar(base: Conversation, input: string, classify?: Classifier, answer?: Answerer, now = Date.now()): Promise<Conversation> {
   let s: Conversation = structuredClone(base);
   const text = input.trim().slice(0, 800);
@@ -125,7 +162,18 @@ export async function processar(base: Conversation, input: string, classify?: Cl
 
   if (humanPattern.test(text) && !text.startsWith("model:")) { transfer(s, "pedido_expresso"); return s; }
   if (riskPattern.test(normalizar(text))) { transfer(s, "sinal_de_risco"); return s; }
+  if (text === "support:human") { transfer(s, "pedido_expresso"); return s; }
   if (s.messages.at(-1)?.options?.some((option) => option.id === text)) s.misunderstandings = 0;
+
+  if (s.stage === "modelo" && isQuestion(text)) {
+    s.pendingQuestion = text;
+    send(s, { text: "Qual é o modelo da sua máquina? Assim consigo responder com mais precisão.", options: [...MODELOS.map((m) => op(`model:${m}`, m)), op("model:other", "Outra máquina")] });
+    return s;
+  }
+  if (s.model && ["menu", "problema", "descrever", "esclarecer"].includes(s.stage) && isQuestion(text)) {
+    await answerQuestion(s, text, answer);
+    return s;
+  }
 
   if (s.stage === "modelo") {
     if (text === "model:other") {
@@ -136,6 +184,12 @@ export async function processar(base: Conversation, input: string, classify?: Cl
     if (!MODELOS.includes(model)) { repeatChoice(s, "Ajudo apenas com máquinas TRES. Escolha um dos modelos mostrados.", [...MODELOS.map((m) => op(`model:${m}`, m)), op("model:other", "Outra máquina")]); return s; }
     s.misunderstandings = 0;
     s.model = model; s.stage = "menu";
+    if (s.pendingQuestion) {
+      const pending = s.pendingQuestion;
+      delete s.pendingQuestion;
+      await answerQuestion(s, pending, answer);
+      return s;
+    }
     send(s, { text: `Certo, ${model}. O que está acontecendo?`, options: menu }); return s;
   }
 
@@ -163,25 +217,27 @@ export async function processar(base: Conversation, input: string, classify?: Cl
       } catch { /* Continue with an explicit fallback. */ }
     }
     if (ficha) { startFicha(s, ficha.id); return s; }
-    if (!s.clarificationAsked) { s.clarificationAsked = true; s.stage = "esclarecer"; send(s, { text: "Qual luz pisca, há água vazando ou a bebida não sai? Descreva o sinal mais visível." }); return s; }
+    if (!s.clarificationAsked) { s.clarificationAsked = true; s.stage = "esclarecer"; send(s, { text: "Pode contar um pouco mais? Em que momento isso acontece e aparece alguma luz ou mensagem na máquina?" }); return s; }
     if (answer && s.model) {
       try {
         const result = await answer(s.model, text);
         if (result) {
           s.aiCalls++; s.inputTokens += result.inputTokens || 0; s.outputTokens += result.outputTokens || 0;
           s.manualAnswerUsed = true;
-          s.stage = "confirmar";
+          s.stage = "duvida";
           send(s, { text: result.text, source: result.source, ephemeral: true });
-          send(s, { text: "Isso resolveu sua dúvida?", options: [op("resolved:yes", "Sim"), op("resolved:no", "Não")] });
+          send(s, { text: "Posso ajudar com mais alguma coisa?", options: [op("question:another", "Outra dúvida"), op("topic:problem", "Resolver um problema")] });
           return s;
         }
       } catch { /* Safe handoff below. */ }
     }
-    transfer(s, "relato_sem_ficha_e_sem_manual_validado"); return s;
+    send(s, { text: "Ainda não consegui identificar o que está acontecendo. Você pode descrever de outra forma ou consultar a Central de Ajuda TRES.", options: [op("support:human", "Central de Ajuda"), op("question:another", "Fazer outra pergunta")] });
+    s.stage = "duvida"; return s;
   }
 
   if (s.stage === "guia") {
     const ficha = FICHA_POR_ID.get(s.issueId!);
+    if (isQuestion(text) && !s.awaitingStepQuestion) s.awaitingStepQuestion = true;
     if (ficha && isDecisionStep(ficha.id, s.step) && ["decision:yes", "decision:no"].includes(text)) {
       const yes = text === "decision:yes";
       if (ficha.id === 2) { s.step = yes ? 2 : ficha.passos.length; showStep(s); return s; }
@@ -193,7 +249,7 @@ export async function processar(base: Conversation, input: string, classify?: Cl
       if (ficha.id === 11 && yes) { transfer(s, "reservatorio_ja_encaixado_e_cheio"); return s; }
       s.step++; showStep(s); return s;
     }
-    if (ficha && isDecisionStep(ficha.id, s.step)) {
+    if (ficha && isDecisionStep(ficha.id, s.step) && !s.awaitingStepQuestion) {
       const current = s.messages.at(-1);
       repeatChoice(s, "Responda à pergunta acima para seguir com a orientação.", current?.options?.filter((o) => o.id.startsWith("decision:")) || []);
       return s;
@@ -212,7 +268,7 @@ export async function processar(base: Conversation, input: string, classify?: Cl
       else send(s, { text: "Pode tentar novamente com calma. Se não conseguir executar este passo, peça uma pessoa a qualquer momento.", options: [op("step:done", "Consegui fazer"), op("step:failed", "Ainda não consegui")] });
       return s;
     }
-    if (text === "step:help") { s.awaitingStepQuestion = true; send(s, { text: "Qual é sua dúvida sobre este passo? Escreva em uma frase. Se houver explicação no manual, mostro a fonte." }); return s; }
+    if (text === "step:help") { s.awaitingStepQuestion = true; send(s, { text: "Qual é sua dúvida sobre essa orientação? Pode escrever em uma frase." }); return s; }
     if (s.awaitingStepQuestion && answer && s.model && text) {
       s.awaitingStepQuestion = false;
       try {
@@ -225,7 +281,9 @@ export async function processar(base: Conversation, input: string, classify?: Cl
           return s;
         }
       } catch { /* Safe handoff below. */ }
-      transfer(s, "duvida_do_passo_sem_fonte"); return s;
+      s.awaitingStepQuestion = true;
+      send(s, { text: "Pode explicar sua dúvida de outra forma? Se preferir, escolha uma das opções abaixo.", options: [op("step:done", "Consegui fazer"), op("step:failed", "Não consegui"), op("support:human", "Central de Ajuda")] });
+      return s;
     }
     repeatChoice(s, "Use as opções do passo ou peça um atendente.", [op("step:done", "Feito"), op("step:failed", "Não consegui"), op("step:help", "Não entendi o passo")]); return s;
   }
@@ -237,21 +295,13 @@ export async function processar(base: Conversation, input: string, classify?: Cl
   }
 
   if (s.stage === "duvida") {
+    if (text === "topic:problem") { s.stage = "problema"; send(s, { text: "Qual destes problemas parece com o seu?", options: problemOptions }); return s; }
+    if (text === "question:another") { send(s, { text: "Pode perguntar. O que você gostaria de saber?" }); return s; }
     if (!text) { send(s, { text: "Escreva sua dúvida sobre a máquina para eu procurar no manual." }); return s; }
-    if (answer && s.model) {
-      try {
-        const result = await answer(s.model, text);
-        if (result) {
-          s.aiCalls++; s.inputTokens += result.inputTokens || 0; s.outputTokens += result.outputTokens || 0;
-          s.manualAnswerUsed = true;
-          s.stage = "confirmar";
-          send(s, { text: result.text, source: result.source, ephemeral: true });
-          send(s, { text: "Isso resolveu sua dúvida?", options: [op("resolved:yes", "Sim"), op("resolved:no", "Não")] });
-          return s;
-        }
-      } catch { /* The guide remains available while retrieval is down. */ }
-    }
-    transfer(s, "manual_sem_resposta_verificada"); return s;
+    const issue = !isQuestion(text) ? identificarFicha(text) : null;
+    if (issue) { startFicha(s, issue.id); return s; }
+    await answerQuestion(s, text, answer);
+    return s;
   }
 
   if (s.stage === "avaliar") {

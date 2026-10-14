@@ -2,7 +2,7 @@
 
 ## Arquitetura
 
-O backend Next.js mantém as 13 fichas como fluxo determinístico. Para dúvidas, `src/lib/rag.ts` gera o embedding da pergunta com OpenAI `text-embedding-3-small` (1536 dimensões), consulta o namespace do modelo no único índice Pinecone (com score mínimo heurístico configurável por `RAG_MIN_SCORE`, sem interpretá-lo como probabilidade) e passa trechos e referências ao LLM via OpenRouter. O ID inicial do LLM é `deepseek/deepseek-v4.1-flash`; `OPENROUTER_MODEL` continua configurável. Se não houver fonte suficiente, o fluxo encaminha ao atendimento simulado. O PDF interno das fichas permanece fora da ingestão.
+O backend Next.js mantém as 13 fichas como fluxo determinístico. Para dúvidas, `src/lib/rag.ts` gera o embedding da pergunta com OpenAI `text-embedding-3-small` (1536 dimensões), consulta o namespace do modelo no índice Pinecone (com score mínimo heurístico configurável por `RAG_MIN_SCORE`, sem interpretá-lo como probabilidade) e passa trechos e referências ao LLM via OpenRouter. Comparações explícitas entre modelos consultam os cinco namespaces. O ID inicial do LLM é `deepseek/deepseek-v4.1-flash`; `OPENROUTER_MODEL` continua configurável. Se não houver informação suficiente, o assistente pede esclarecimentos e oferece a Central de Ajuda. O PDF interno das fichas permanece fora da ingestão.
 
 ## Configuração
 
@@ -14,7 +14,7 @@ Coloque apenas manuais e guias públicos verificados em `data/manuais/<modelo>/`
 
 ## Testar
 
-Rode `npm test`, `npm run typecheck` e `npm run build`. Com as chaves e ao menos um manual, rode a ingestão e confira os namespaces no Pinecone. Depois inicie `npm run dev` e faça uma dúvida sobre o modelo ingerido no chat. Confira a fonte exibida. Repita com outro modelo para verificar o isolamento e com pergunta sem cobertura para conferir a transferência. Não use `contexto_hackathon/fluxo.pdf` na ingestão.
+Rode `npm test`, `npm run typecheck` e `npm run build`. Com as chaves e ao menos um manual, rode a ingestão e confira os namespaces no Pinecone. Depois inicie `npm run dev` e faça uma dúvida sobre o modelo ingerido no chat. A resposta deve vir sem fonte visível. Repita com outro modelo para verificar o isolamento e com pergunta sem cobertura para conferir o pedido de esclarecimento. Não use `contexto_hackathon/fluxo.pdf` na ingestão.
 
 ## Estado verificado em 14/10/2026
 

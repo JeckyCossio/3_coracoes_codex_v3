@@ -64,9 +64,9 @@ Esse modo é apenas para testar o chatbot. A sessão fica no navegador em um tok
 ## Testar como consumidor
 
 1. Abra `http://localhost:3000` em uma janela anônima para iniciar uma sessão nova. Se o servidor não estiver aberto, execute `npm run dev`.
-2. Escolha **LOV → Dúvida sobre a máquina** e pergunte: **“O reservatório ficou sem água durante o uso. O que faço?”** A resposta deve mostrar uma orientação curta e a fonte do manual LOV.
-3. Inicie outra conversa e escolha **Touch → Dúvida sobre a máquina**. Pergunte sobre o reservatório; a fonte deve mencionar Touch, nunca LOV.
-4. Faça uma pergunta sem cobertura, como **“Como conecto a LOV ao Wi-Fi?”**. O protótipo deve encaminhar em vez de inventar instruções.
+2. Escolha **LOV** e pergunte diretamente: **“Qual a diferença dos botões das máquinas da 3 corações?”** A resposta deve explicar as teclas da LOV sem mostrar fontes ou termos internos.
+3. Inicie outra conversa e escolha **Touch → Dúvida sobre a máquina**. Pergunte sobre o reservatório; a resposta deve usar apenas informações da Touch.
+4. Faça uma pergunta sem cobertura, como **“Como conecto a LOV ao Wi-Fi?”**. O assistente deve pedir esclarecimentos ou indicar a Central de Ajuda, sem inventar instruções.
 5. Para ver a fila simulada e os indicadores, abra `/atendente` e `/dashboard` com qualquer usuário e a `PAINEL_SENHA` do seu `.env.local`.
 
 A transferência é simulada e não chega a uma pessoa real. As fichas técnicas ainda exigem revisão humana por modelo antes de atendimento público.
@@ -80,11 +80,11 @@ A integração RAG usa embeddings OpenAI `text-embedding-3-small`, um índice Pi
 - `src/lib/conversation.ts`: motor de estados sem dependência do canal. Recebe evento e estado; devolve a próxima etapa e as mensagens.
 - `src/lib/fichas.ts`: 13 fichas estruturadas do PDF do desafio. Passos dependentes de manual ou de material ausente são bloqueados para transferência.
 - `src/lib/ai.ts`: classificação de “Outro problema” pelo OpenRouter, quando habilitada.
-- `src/lib/rag.ts`: embedding da pergunta, busca no namespace do modelo e resposta com fonte. Sem trecho adequado, não responde.
+- `src/lib/rag.ts`: embedding da pergunta, busca nos manuais do modelo e resposta fundamentada. A referência fica interna; comparações explícitas entre modelos consultam os namespaces relevantes.
 - `src/lib/db.ts`: sessões, casos e fila simulada em SQLite.
 - `src/app/api/chat`: API da conversa; `/api/painel/*`: fila e indicadores.
 
-O navegador mantém apenas o ID da sessão no `localStorage`. Durante a conversa, o banco guarda o estado e mensagens do **bot**, não o texto livre digitado pelo consumidor; respostas dinâmicas do manual são substituídas por um marcador ao persistir. Ao encerrar ou transferir, o histórico temporário é apagado e resta só a mensagem final na sessão. O mini-relatório tem resumo determinístico por padrão e pode receber um resumo de IA a partir de códigos estruturados, sem relato literal do usuário. O histórico visual das mensagens do usuário desaparece após recarregar a página.
+O navegador mantém o ID da sessão no `localStorage`. Durante a conversa, o banco guarda o estado e mensagens do **bot**, inclusive as respostas dinâmicas, mas não o texto livre digitado pelo consumidor. Ao encerrar ou transferir, resta só a mensagem final na sessão. O mini-relatório tem resumo determinístico por padrão e pode receber um resumo de IA a partir de códigos estruturados, sem relato literal do usuário. O histórico visual das mensagens do usuário desaparece após recarregar a página.
 
 ## Métricas
 

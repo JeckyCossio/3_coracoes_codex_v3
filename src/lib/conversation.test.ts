@@ -21,7 +21,7 @@ describe("jornada de autoatendimento", () => {
     const s = await sequence(["model:Touch", "topic:problem", "issue:10", "decision:no"]);
     expect(s.stage).toBe("transferido");
     expect(s.handoffReason).toBe("instrucao_sem_validacao_por_modelo");
-    expect(s.messages.at(-2)?.text).toMatch(/e-mail 37/);
+    expect(s.messages.at(-2)?.text).toContain("orientação específica");
   });
 
   it("interrompe a jornada imediatamente quando há sinal elétrico", async () => {
@@ -47,12 +47,12 @@ describe("jornada de autoatendimento", () => {
     expect(s.messages.at(-2)?.text).toContain("LOV, Modo, Passione, Luna e Touch");
   });
 
-  it("redireciona uma entrada fora do assunto e transfere após insistência", async () => {
+  it("pede esclarecimento sem transferir por entradas não compreendidas", async () => {
     let s = await sequence(["model:LOV", "qual a previsão do tempo?"]);
-    expect(s.stage).toBe("menu");
-    expect(s.messages.at(-1)?.text).toContain("máquinas TRES");
+    expect(s.stage).toBe("duvida");
     s = await processar(s, "conte uma piada");
-    expect(s.handoffReason).toBe("duas_entradas_nao_compreendidas");
+    expect(s.stage).toBe("duvida");
+    expect(s.handoffReason).toBeUndefined();
   });
 
   it("zera o contador de entradas inválidas após uma escolha válida", async () => {
@@ -64,10 +64,11 @@ describe("jornada de autoatendimento", () => {
   it("responde dúvida apenas quando o adaptador retorna fonte", async () => {
     let s = await sequence(["model:Passione", "topic:question"]);
     s = await processar(s, "Como limpar?", undefined, async () => ({ text: "Veja a limpeza na seção 4.", source: "Manual Passione · p. 4" }));
-    expect(s.stage).toBe("confirmar");
+    expect(s.stage).toBe("duvida");
     expect(s.messages.at(-2)?.source).toContain("Passione");
     const noSource = await sequence(["model:Passione", "topic:question", "Como limpar?"]);
-    expect(noSource.handoffReason).toBe("manual_sem_resposta_verificada");
+    expect(noSource.stage).toBe("duvida");
+    expect(noSource.messages.at(-1)?.text).toContain("mais detalhes");
   });
 
   it("esclarece um passo pelo manual sem trocar o procedimento", async () => {
@@ -89,7 +90,7 @@ describe("jornada de autoatendimento", () => {
       const s = await sequence(["model:LOV", "topic:problem", "issue:other", relato]);
       expect(s.issueId).toBe(id);
       expect(["guia", "transferido"]).toContain(s.stage);
-      expect(s.messages.some((m) => m.source === `Fluxo CS, ficha ${id}, p. ${FICHAS[id - 1].pagina}`)).toBe(true);
+      expect(s.messages.some((m) => m.source === `Fluxo CS, ficha ${id}, p. ${FICHAS[id - 1].pagina}` || m.text.includes("orientação específica"))).toBe(true);
     }
   );
 
@@ -163,17 +164,40 @@ describe("jornada de autoatendimento", () => {
     expect(calls).toBe(0);
   });
 
-  it("faz uma pergunta de esclarecimento e transfere um relato sem correspondência", async () => {
+  it("faz uma pergunta de esclarecimento sem transferir um relato incerto", async () => {
     let s = await sequence(["model:LOV", "topic:problem", "issue:other", "barulho intermitente"]);
     expect(s.stage).toBe("esclarecer");
     s = await processar(s, "continua fazendo barulho");
-    expect(s.handoffReason).toBe("relato_sem_ficha_e_sem_manual_validado");
+    expect(s.stage).toBe("duvida");
+    expect(s.handoffReason).toBeUndefined();
   });
 
-  it("transfere a dúvida sobre um passo quando o manual não traz fonte", async () => {
+  it("esclarece a dúvida sobre um passo quando o manual não traz resposta", async () => {
     let s = await sequence(["model:LOV", "topic:problem", "issue:other", "máquina não liga", "step:help"]);
     s = await processar(s, "O que é a voltagem?", undefined, async () => null);
-    expect(s.handoffReason).toBe("duvida_do_passo_sem_fonte");
+    expect(s.stage).toBe("guia");
+    expect(s.messages.at(-1)?.text).toContain("explicar sua dúvida");
+  });
+
+  it("responde a pergunta sobre botões fora do menu de dúvidas", async () => {
+    let s = await sequence(["model:LOV"]);
+    let asked = "";
+    s = await processar(s, "Qual a diferença dos botões das máquinas da 3 corações?", undefined, async (_model, question) => {
+      asked = question;
+      return { text: "Os botões coloridos selecionam bebidas e volumes diferentes.", source: "Manual LOV" };
+    });
+    expect(asked).toContain("diferença dos botões");
+    expect(s.stage).toBe("duvida");
+    expect(s.messages.at(-2)?.text).toContain("botões coloridos");
+    expect(s.handoffReason).toBeUndefined();
+  });
+
+  it("retoma a pergunta depois da escolha do modelo", async () => {
+    let s = await sequence(["Qual a diferença dos botões?"]);
+    expect(s.pendingQuestion).toContain("botões");
+    s = await processar(s, "model:Touch", undefined, async () => ({ text: "As cores indicam opções de bebida.", source: "Manual Touch" }));
+    expect(s.stage).toBe("duvida");
+    expect(s.messages.at(-2)?.text).toContain("cores");
   });
 
   it("não altera uma conversa encerrada ao receber mensagem repetida", async () => {

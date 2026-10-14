@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./styles.css";
 export const metadata: Metadata = {
-  title: "TRES Ajuda · protótipo",
+  title: "TRES Ajuda",
   description: "Jornada de autoatendimento para máquinas TRES"
 };
 export const viewport: Viewport = { themeColor: "#0E0E0F", colorScheme: "dark" };

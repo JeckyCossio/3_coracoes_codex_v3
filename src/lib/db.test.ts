@@ -30,12 +30,12 @@ describe("persistência do protótipo", () => {
     expect(markAttended(id)).toBe(false);
   });
 
-  it("não guarda o texto dinâmico do manual na sessão", () => {
+  it("preserva a resposta durante a sessão para aparecer após recarregar", () => {
     const s = newConversation(randomUUID());
     s.messages.push({ text: "Resposta privada temporária", source: "Manual LOV · p. 4", ephemeral: true });
     saveSession(s);
     const stored = getSession(s.id);
-    expect(JSON.stringify(stored)).not.toContain("Resposta privada temporária");
+    expect(stored?.messages.at(-1)?.text).toBe("Resposta privada temporária");
     expect(stored?.messages.at(-1)?.source).toContain("Manual LOV");
   });
 

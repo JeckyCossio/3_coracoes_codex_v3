@@ -47,7 +47,7 @@ export function saveSession(state: Conversation) {
   const stored = {
     ...state,
     messages: temporaryMessages.map((message) => message.ephemeral
-      ? { text: "Resposta do manual exibida durante a conversa.", source: message.source }
+      ? { text: message.text, source: message.source }
       : message)
   };
   db().prepare("INSERT INTO sessions (id, state_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json, updated_at=excluded.updated_at")
