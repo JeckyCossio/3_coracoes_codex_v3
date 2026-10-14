@@ -66,7 +66,7 @@ export default function Home() {
       <div className="chat-log" role="log" aria-live="polite" ref={logRef}>
         {state?.messages.map((message, index) => <div key={index}>
           {userMessages.filter((item) => item.at === index).map((item, i) => <div className="bubble-row user" key={i}><div className="bubble user-bubble">{item.text}</div></div>)}
-          <div className="bubble-row"><div className={`bubble bot-bubble ${message.tone || ""}`}>{message.text}</div></div>
+          <div className="bubble-row"><div className={`bubble bot-bubble ${message.tone || ""}`}>{message.text}{message.links?.map((link) => <a className="chat-link" key={link.url} href={link.url} target={link.url.startsWith("https://") ? "_blank" : undefined} rel={link.url.startsWith("https://") ? "noopener noreferrer" : undefined}>{link.label} ↗</a>)}</div></div>
         </div>)}
         {userMessages.filter((item) => item.at >= (state?.messages.length || 0)).map((item, i) => <div className="bubble-row user" key={i}><div className="bubble user-bubble">{item.text}</div></div>)}
         {busy && <div className="bubble-row"><div className="bubble bot-bubble typing">Preparando a próxima orientação…</div></div>}
@@ -77,6 +77,6 @@ export default function Home() {
         {error && <p className="error" role="alert">{error}</p>}
       </div>
     </section>
-    <footer className="site-footer"><a href="https://www.escolhatres.com.br/central-de-ajuda/" target="_blank" rel="noopener noreferrer">Central de Ajuda TRES ↗</a></footer>
+    <footer className="site-footer"><a href="tel:08000313033">Atendimento TRES: 0800.031.3033</a></footer>
   </main>;
 }

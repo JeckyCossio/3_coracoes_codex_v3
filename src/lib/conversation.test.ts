@@ -39,6 +39,30 @@ describe("jornada de autoatendimento", () => {
   it("reconhece o primeiro pedido por atendimento humano", async () => {
     const s = await sequence(["model:Modo", "quero falar com uma pessoa"]);
     expect(s.handoffReason).toBe("pedido_expresso");
+    expect(s.messages.at(-1)?.text).toContain("0800.031.3033");
+    expect(s.messages.at(-1)?.links?.[0]?.url).toBe("tel:08000313033");
+  });
+
+  it("envia vídeo de limpeza do modelo sem consultar IA", async () => {
+    let s = await sequence(["model:LOV"]);
+    let calls = 0;
+    s = await processar(s, "Me manda um vídeo de limpeza", undefined, async () => { calls++; return null; });
+    expect(calls).toBe(0);
+    expect(s.stage).toBe("menu");
+    expect(s.messages.at(-1)?.links?.[0]?.url).toBe("https://www.youtube.com/watch?v=TUre1TNoJnQ");
+  });
+
+  it("oferece o vídeo específico durante a orientação", async () => {
+    let s = await sequence(["model:Luna", "topic:problem", "issue:other", "bico entupido"]);
+    expect(s.messages.at(-1)?.options?.some((option) => option.id === "step:video")).toBe(true);
+    s = await processar(s, "step:video");
+    expect(s.messages.at(-1)?.links?.[0]?.url).toBe("https://www.youtube.com/watch?v=SsOypE_tndw");
+  });
+
+  it("não recomenda vídeo de limpeza de outro modelo", async () => {
+    const s = await sequence(["model:Touch", "Vídeo de limpeza"]);
+    expect(s.messages.at(-1)?.text).toContain("Não encontrei um vídeo específico");
+    expect(s.messages.at(-1)?.links?.[0]?.url).toBe("/ajuda?modelo=touch");
   });
 
   it("explica os modelos cobertos antes de transferir outra máquina", async () => {

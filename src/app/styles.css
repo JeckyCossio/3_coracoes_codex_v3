@@ -87,6 +87,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 .bot-bubble{background:var(--panel2);border-left:6px solid var(--line2);color:var(--paper)}
 .bot-bubble.alert{border-left-color:var(--yellow)}
 .bot-bubble.success{border-left-color:var(--green)}
+.chat-link{display:block;width:fit-content;margin-top:10px;color:var(--pink2);font-weight:700;text-decoration:underline;text-underline-offset:3px}
 .user-bubble{background:var(--pink2);color:var(--ink)}
 .source{display:block;border-top:1px solid var(--line);padding-top:8px;margin-top:10px;font:400 11px/1.4 var(--mono);color:var(--dim)}
 .typing{font:400 13px/1.4 var(--mono);color:var(--mute)}
