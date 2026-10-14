@@ -55,7 +55,10 @@ function transfer(s: Conversation, reason: string) {
   s.stage = "transferido";
   s.outcome = "transferido_pendente";
   s.handoffReason = reason;
-  send(s, { text: "Registrei sua solicitação na fila simulada do atendente. O resumo do que aconteceu já está disponível para ele.", tone: "alert", options: [op("restart", "Começar outra conversa")] });
+  const text = process.env.CHAT_STORAGE === "signed"
+    ? "Este caso precisa de atendimento humano. Esta demonstração não envia a conversa para uma fila; entre em contato pelos canais oficiais de atendimento."
+    : "Registrei sua solicitação na fila simulada do atendente. O resumo do que aconteceu já está disponível para ele.";
+  send(s, { text, tone: "alert", options: [op("restart", "Começar outra conversa")] });
 }
 
 function repeatChoice(s: Conversation, message: string, options: Option[]) {

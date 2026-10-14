@@ -32,6 +32,12 @@ BASE_URL=http://localhost:3000 PANEL_PASSWORD=sua-senha npm run smoke:api
 
 Esse teste cria casos simulados. Use uma instância com `SQLITE_PATH` separado do banco da demonstração quando quiser manter as métricas limpas.
 
+## Teste do chatbot na Vercel
+
+Importe `JeckyCossio/3_coracoes_codex_v3` com preset **Next.js** e diretório raiz `./`. Mantenha os comandos de instalação, build e diretório de saída automáticos. Configure as variáveis de ambiente do servidor no projeto Vercel (sem `NEXT_PUBLIC_`): `CHAT_STORAGE=signed`, `SESSION_SECRET` com no mínimo 32 caracteres aleatórios, `ENABLE_EXTERNAL_AI=1`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENAI_API_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX` e `RAG_MIN_SCORE`. Use os valores de `.env.local` para as chaves, sem publicá-los no repositório. Uma chave aleatória pode ser gerada localmente com `openssl rand -hex 32`.
+
+Esse modo é apenas para testar o chatbot. A sessão fica no navegador em um token assinado e expira após 24 horas sem interação. A fila e os indicadores não são persistidos; transferências informam que o consumidor deve buscar os canais oficiais. Para uma implantação com fila e indicadores, será necessário trocar o SQLite por um banco persistente compartilhado.
+
 ## Demonstração sem chaves
 
 1. Escolha **LOV → Problema na máquina → Outro problema** e escreva `alavanca não fecha com cápsula`.

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { classifyWithOpenRouter, summarizeHandoff } from "@/lib/ai";
-import { processar } from "@/lib/conversation";
+import { newConversation, processar } from "@/lib/conversation";
 import { createSession, getSession, saveCase, saveSession, sweepExpired } from "@/lib/db";
 import { answerWithManual } from "@/lib/rag";
+import { readSignedSession, signSession } from "@/lib/signed-session";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  let body: { sessionId?: unknown; input?: unknown };
+  let body: { sessionId?: unknown; sessionToken?: unknown; input?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -19,6 +20,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Dados da conversa inválidos." }, { status: 400 });
   }
   try {
+    if (process.env.CHAT_STORAGE === "signed") {
+      const previous = readSignedSession(body.sessionToken);
+      const state = body.input === "restart" ? newConversation(randomUUID()) : previous || newConversation(randomUUID());
+      const next = typeof body.input === "string" && body.input !== "restart" && previous
+        ? await processar(state, body.input, classifyWithOpenRouter, answerWithManual)
+        : state;
+      return NextResponse.json({ sessionId: next.id, sessionToken: signSession(next), state: next, demoMode: true });
+    }
     sweepExpired();
     const id = typeof body.sessionId === "string" && /^[a-f0-9-]{36}$/i.test(body.sessionId) ? body.sessionId : randomUUID();
     if (body.input === "restart") {

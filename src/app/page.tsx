@@ -11,13 +11,15 @@ export default function Home() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [userMessages, setUserMessages] = useState<LocalUserMessage[]>([]);
+  const [demoMode, setDemoMode] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const sessionId = localStorage.getItem("tres-session") || undefined;
-    fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId }) })
+    const sessionToken = localStorage.getItem("tres-session-token") || undefined;
+    fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, sessionToken }) })
       .then((r) => { if (!r.ok) throw new Error("Falha ao iniciar"); return r.json(); })
-      .then((data) => { localStorage.setItem("tres-session", data.sessionId); setState(data.state); })
+      .then((data) => { localStorage.setItem("tres-session", data.sessionId); if (data.sessionToken) localStorage.setItem("tres-session-token", data.sessionToken); setDemoMode(Boolean(data.demoMode)); setState(data.state); })
       .catch(() => setError("Não foi possível abrir a conversa. Atualize a página e tente novamente."))
       .finally(() => setBusy(false));
   }, []);
@@ -33,10 +35,14 @@ export default function Home() {
     if (input === "restart") setUserMessages([]);
     else setUserMessages((items) => [...items, { at, text: label || input }]);
     try {
-      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: state.id, input }) });
+      const sessionToken = localStorage.getItem("tres-session-token") || undefined;
+      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: state.id, sessionToken, input }) });
       if (!response.ok) throw new Error("Falha ao enviar");
       const data = await response.json();
       localStorage.setItem("tres-session", data.sessionId);
+      if (data.sessionToken) localStorage.setItem("tres-session-token", data.sessionToken);
+      else localStorage.removeItem("tres-session-token");
+      setDemoMode(Boolean(data.demoMode));
       setState(data.state);
     } catch {
       setUserMessages((items) => items.slice(0, -1));
@@ -73,6 +79,6 @@ export default function Home() {
         {error && <p className="error" role="alert">{error}</p>}
       </div>
     </section>
-    <footer className="site-footer"><span>Baseado no fluxo de atendimento do desafio · Conteúdo por modelo pendente de validação</span><nav className="pill-nav" aria-label="Áreas internas"><a href="/atendente">Fila simulada</a><a href="/dashboard">Indicadores</a></nav></footer>
+    <footer className="site-footer"><span>Baseado no fluxo de atendimento do desafio · Conteúdo por modelo pendente de validação</span>{!demoMode && <nav className="pill-nav" aria-label="Áreas internas"><a href="/atendente">Fila simulada</a><a href="/dashboard">Indicadores</a></nav>}</footer>
   </main>;
 }
