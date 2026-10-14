@@ -17,7 +17,7 @@ Abra `http://localhost:3000/ajuda` para começar pela página do QR Code, ou `ht
 
 ## Jornada integrada do QR Code
 
-A página móvel do projeto `QrCode` agora faz parte desta aplicação em `/ajuda`. Ela reúne tutoriais, manuais, guias rápidos e materiais de limpeza dos cinco modelos. O botão **Conversar com assistente** abre o chatbot neste mesmo endereço; o link de volta do chatbot retorna aos materiais do modelo escolhido. Isto é uma conversa na web, não uma integração com WhatsApp.
+A página móvel do projeto `QrCode` agora faz parte desta aplicação em `/ajuda`. Ela reúne tutoriais, manuais, guias rápidos e materiais de limpeza dos cinco modelos. O visual e as páginas de conteúdo seguem os arquivos originais do projeto QR. O primeiro botão, **Atendimento WhatsApp**, abre o chatbot web neste mesmo endereço; o link no cabeçalho do chatbot retorna aos materiais do modelo escolhido. O botão simula a entrada do atendimento, sem conexão com o WhatsApp real.
 
 Cada QR pode apontar para a URL pública de um modelo. Localmente, os caminhos são:
 

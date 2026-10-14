@@ -5,7 +5,7 @@ const icons = {
   manual: '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M5 5.5h15a3 3 0 0 1 3 3V24H8a3 3 0 0 1-3-3z"/><path d="M5 19.5a3 3 0 0 1 3-3h15M10 10h8M10 13h6"/></svg>',
   guide: '<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="5" y="3" width="18" height="22" rx="2"/><path d="M9 9h10M9 14h7M9 19h5"/><path d="m17 19 2 2 4-4"/></svg>',
   clean: '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M7 15h14v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2zM10 15V8h8v7M12 8V5h4v3"/><path d="M4 8V4M2 6h4M23 4v5M20.5 6.5h5"/></svg>',
-  chat: '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3a11 11 0 0 0-9.6 16.4L3 25l5.8-1.5A11 11 0 1 0 14 3Z"/><path d="M8 11h12M8 15h9"/></svg>',
+  chat: '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3a11 11 0 0 0-9.6 16.4L3 25l5.8-1.5A11 11 0 1 0 14 3Z"/><path d="M10 9c.5 4 4 7.5 8 8l1.4-1.5-2.3-2-1.3 1c-1.3-.6-2.1-1.4-2.7-2.7l1-1.3-2-2.3z"/></svg>',
   search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 5 5"/></svg>',
   info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg>',
   external: '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M7 21 21 7M11 7h10v10"/></svg>',
@@ -75,11 +75,9 @@ const models = {
 const supportUrl = "https://www.escolhatres.com.br/central-de-ajuda/";
 const requestedModel = new URLSearchParams(location.search).get("modelo")?.toLowerCase();
 const qrModel = models[requestedModel] ? requestedModel : null;
-function chatUrl(model = qrModel) {
-  const url = new URL("/", location.origin);
-  if (model) url.searchParams.set("modelo", model);
-  return url.pathname + url.search;
-}
+const chatRoute = new URL("/", location.origin);
+if (qrModel) chatRoute.searchParams.set("modelo", qrModel);
+const chatbotUrl = chatRoute.href;
 
 function text(value) {
   return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -91,7 +89,7 @@ function external(url, label, className = "") {
 
 function currentRoute() {
   const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-  if (parts[0] === "chat" || parts[0] === "whatsapp") return { page: "chat" };
+  if (parts[0] === "whatsapp") return { page: "whatsapp" };
   if (parts[0] === "modelos" && categories[parts[1]]) return { page: "models", category: parts[1] };
   if (parts[0] === "conteudo" && categories[parts[1]] && models[parts[2]]) return { page: "content", category: parts[1], model: parts[2] };
   return { page: "home" };
@@ -106,21 +104,22 @@ const accents = {
 const modelAccents = ["var(--red)", "var(--caramel)", "var(--green)", "var(--beige)", "var(--red)"];
 
 function home() {
+  const whatsappLabel = "Atendimento WhatsApp";
   return `
     <section class="landing-hero" aria-labelledby="home-title">
       <div class="hero-intro">
         <span class="hero-chip"><span aria-hidden="true">○ ○ ●</span> AJUDA TRES</span>
         <h1 id="home-title">Escaneou. <br><em>Resolveu.</em></h1>
         <p class="hero-description">A resposta para sua máquina está aqui. Escolha por onde começar.</p>
-        ${qrModel ? `<p class="hero-model">Máquina: ${models[qrModel].name} · <a href="/ajuda#/">Trocar modelo</a></p>` : ""}
+        ${qrModel ? `<p class="hero-model">Máquina: ${models[qrModel].name} · <a href="?modelo=#/">Trocar modelo</a></p>` : ""}
         <div class="hero-steps" aria-hidden="true"><span>QR NA MÁQUINA</span><i>→</i><span>AJUDA NO CELULAR</span></div>
       </div>
       <div class="hero-menu">
         <div class="hero-menu-bar"><h2>Como podemos ajudar?</h2><span aria-hidden="true">5 opções</span></div>
         <nav class="hero-options" aria-label="Opções de ajuda">
-          <a class="hero-option is-primary" href="#/chat" aria-label="Conversar com o assistente virtual TRES">
+          <a class="hero-option is-primary" href="${chatbotUrl}" aria-label="${whatsappLabel}">
             <span class="option-tile" aria-hidden="true">${icons.chat}</span>
-            <span class="option-label">Conversar com assistente<span class="option-desc">Conte o que aconteceu com sua máquina</span></span>
+            <span class="option-label">Atendimento WhatsApp<span class="option-desc">Converse com a gente agora</span></span>
             <span class="option-arrow" aria-hidden="true">→</span>
           </a>
           ${Object.entries(categories).map(([key, item]) => `
@@ -130,7 +129,7 @@ function home() {
               <span class="option-arrow" aria-hidden="true">→</span>
             </a>`).join("")}
         </nav>
-        <p class="hero-menu-note">Não sabe o que procurar? Conte o problema ao assistente virtual.</p>
+        <p class="hero-menu-note">${chatbotUrl ? "Não sabe o que procurar? Conte o problema pelo WhatsApp." : "Atendimento por WhatsApp em preparação."}</p>
       </div>
     </section>
   `;
@@ -193,32 +192,30 @@ function contentPage(category, model) {
     <label class="search-box"><span class="sr-only">Buscar conteúdo da máquina ${m.name}</span>${icons.search}<input id="resource-search" type="search" placeholder="Buscar por assunto nesta página" autocomplete="off" /></label>
     <div class="resource-grid" id="resource-grid">${resources.map(resourceCard).join("")}</div>
     ${emptyVideo ? `<div class="notice">Ainda não localizamos um vídeo oficial de higienização específico da ${m.name}. Consulte a seção de limpeza no manual acima ou a ${external(supportUrl, "Central de Ajuda TRES ↗")}.</div>` : `<div class="notice">Siga as orientações do material do seu modelo. Em caso de vazamento, dano no cabo ou outro sinal de risco, interrompa o uso e procure ${external(supportUrl, "o atendimento TRES ↗")}.</div>`}
-    <div class="chat-bridge"><strong>Ainda precisa de ajuda?</strong><p>O assistente já abre com a ${m.name} selecionada.</p><a href="${chatUrl(model)}">Conversar sobre a ${m.name} →</a></div>
   `;
 }
 
-function chatPage() {
+function whatsappPage() {
   return `
     <section class="page-intro">
       <a class="back-link" href="#/">← Voltar às opções</a>
-      <div class="eyebrow">Assistente virtual</div>
+      <div class="eyebrow">Atendimento</div>
       <h1>Vamos conversar?</h1>
-      <p class="lead">Conte o que aconteceu com sua máquina. O assistente busca uma orientação no fluxo de atendimento e nos manuais disponíveis.</p>
+      <p class="lead">Se não encontrou o que precisa, o atendimento pode ajudar a identificar o próximo passo.</p>
     </section>
     <div class="contact-panel">
-      <h2>Converse com o assistente TRES</h2>
-      <p>${qrModel ? `Sua máquina ${models[qrModel].name} já estará selecionada.` : "Escolha o modelo da máquina ao iniciar a conversa."}</p>
-      <a href="${chatUrl()}">Abrir conversa →</a>
+      <h2>Atendimento pelo WhatsApp</h2>
+      ${chatbotUrl ? `<p>Abra a conversa para contar o que está acontecendo com sua máquina.</p>${external(chatbotUrl, "Abrir WhatsApp ↗")}` : `<p>O atendimento por WhatsApp está indisponível no momento. Você pode consultar a Central de Ajuda ou ligar para a TRES.</p><button type="button" disabled aria-disabled="true">WhatsApp indisponível</button>`}
       ${external(supportUrl, "Ver Central de Ajuda ↗", "secondary-link")}
-      <small>Protótipo de autoatendimento. Nenhum atendente real recebe as mensagens.</small>
+      <small>Atendimento TRES: 0800 979 2021. Consulte os horários na Central de Ajuda.</small>
     </div>
   `;
 }
 
 function render() {
   const route = currentRoute();
-  app.innerHTML = route.page === "home" ? home() : route.page === "models" ? modelPicker(route.category) : route.page === "content" ? contentPage(route.category, route.model) : chatPage();
-  document.title = `${route.page === "home" ? "Ajuda para sua máquina" : route.page === "models" ? "Escolha sua máquina" : route.page === "chat" ? "Assistente virtual" : `${categories[route.category].short} da ${models[route.model].name}`} | TRES`;
+  app.innerHTML = route.page === "home" ? home() : route.page === "models" ? modelPicker(route.category) : route.page === "content" ? contentPage(route.category, route.model) : whatsappPage();
+  document.title = `${route.page === "home" ? "Ajuda para sua máquina" : route.page === "models" ? "Escolha sua máquina" : route.page === "whatsapp" ? "Atendimento" : `${categories[route.category].short} da ${models[route.model].name}`} | TRES`;
   if (route.page === "content") {
     const resources = resourceList(route.category, route.model);
     const input = document.querySelector("#resource-search");
