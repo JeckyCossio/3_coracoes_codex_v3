@@ -13,7 +13,23 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Abra `http://localhost:3000`. A tela do atendente fica em `/atendente` e o painel de indicadores em `/dashboard`. As telas internas pedem autenticação Basic: qualquer nome de usuário e a senha `PAINEL_SENHA`.
+Abra `http://localhost:3000/ajuda` para começar pela página do QR Code, ou `http://localhost:3000` para abrir o chatbot diretamente. A tela do atendente fica em `/atendente` e o painel de indicadores em `/dashboard`. As telas internas pedem autenticação Basic: qualquer nome de usuário e a senha `PAINEL_SENHA`.
+
+## Jornada integrada do QR Code
+
+A página móvel do projeto `QrCode` agora faz parte desta aplicação em `/ajuda`. Ela reúne tutoriais, manuais, guias rápidos e materiais de limpeza dos cinco modelos. O botão **Conversar com assistente** abre o chatbot neste mesmo endereço; o link de volta do chatbot retorna aos materiais do modelo escolhido. Isto é uma conversa na web, não uma integração com WhatsApp.
+
+Cada QR pode apontar para a URL pública de um modelo. Localmente, os caminhos são:
+
+```text
+http://localhost:3000/ajuda?modelo=lov
+http://localhost:3000/ajuda?modelo=modo
+http://localhost:3000/ajuda?modelo=passione
+http://localhost:3000/ajuda?modelo=luna
+http://localhost:3000/ajuda?modelo=touch
+```
+
+Sem `?modelo=`, a pessoa escolhe o modelo na página. Com o parâmetro, os materiais e o chatbot já usam o modelo correspondente. Ao publicar, substitua apenas `http://localhost:3000` pelo domínio definitivo antes de gerar os QR Codes para impressão.
 
 Verificação:
 

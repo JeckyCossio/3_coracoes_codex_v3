@@ -53,6 +53,8 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 .brand-logo{display:block;height:45px;width:auto;flex:none}
 .site-header strong{display:block;font:800 20px/1.1 var(--display);letter-spacing:-.02em}
 .site-header small{display:block;margin-top:4px}
+.materials-link{margin-left:auto;min-height:44px;display:inline-flex;align-items:center;color:var(--pink2);font:500 11px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;text-decoration:none;white-space:nowrap}
+.materials-link:hover{text-decoration:underline}
 .header-label{margin-left:auto;align-self:center}
 
 /* ---------- Chat: introdução ---------- */

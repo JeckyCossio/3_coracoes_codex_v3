@@ -17,7 +17,8 @@ export default function Home() {
   useEffect(() => {
     const sessionId = localStorage.getItem("tres-session") || undefined;
     const sessionToken = localStorage.getItem("tres-session-token") || undefined;
-    fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, sessionToken }) })
+    const model = new URLSearchParams(window.location.search).get("modelo") || undefined;
+    fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, sessionToken, model }) })
       .then((r) => { if (!r.ok) throw new Error("Falha ao iniciar"); return r.json(); })
       .then((data) => { localStorage.setItem("tres-session", data.sessionId); if (data.sessionToken) localStorage.setItem("tres-session-token", data.sessionToken); setDemoMode(Boolean(data.demoMode)); setState(data.state); })
       .catch(() => setError("Não foi possível abrir a conversa. Atualize a página e tente novamente."))
@@ -56,7 +57,7 @@ export default function Home() {
     <header className="site-header">
       <img className="brand-logo" src="/brand/cafeina-3coracoes.svg" alt="cafeína e 3corações" width="140" height="45"/>
       <div><strong>TRES Ajuda</strong><small className="k">Protótipo de autoatendimento</small></div>
-      <div className="header-label chip">DESAFIO 03</div>
+      <a className="materials-link" href={`/ajuda${state?.model ? `?modelo=${state.model.toLowerCase()}` : ""}`}>← Guias e vídeos</a>
     </header>
     <section className="intro">
       <div className="intro-copy"><p className="chip">A ajuda começa por aqui</p><h1>Seu café de volta,<br/><em>um passo de cada vez.</em></h1><p>Escolha a máquina e conte o que aconteceu. Se o caso precisar de uma pessoa, o contexto segue junto.</p></div>
