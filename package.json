@@ -1,0 +1,33 @@
+{
+  "name": "tres-ajuda-chatbot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke:api": "node scripts/smoke-api.mjs",
+    "fichas:check": "tsx scripts/check-fichas.ts",
+    "rag:ingest": "tsx scripts/ingest-manuals.ts"
+  },
+  "dependencies": {
+    "@pinecone-database/pinecone": "^6.1.0",
+    "better-sqlite3": "^12.2.0",
+    "next": "^16.4.0",
+    "openai": "^6.4.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.0",
+    "vitest": "^3.2.0"
+  }
+}

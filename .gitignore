@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env*
+!.env.example
+data/*.sqlite*
+*.tsbuildinfo
+.playwright-cli/
+
+
+# Materiais internos do hackathon e notas locais de execução
+contexto_hackathon/
+.agents/
